@@ -117,6 +117,13 @@
     .ev-acciones { display: flex; gap: 4px; align-items: flex-start; flex: none; }
     .ev-acciones button { padding: 2px 8px; font-size: 12px; border-radius: 8px; }
     .item.hecho .titulo { text-decoration: line-through; opacity: .6; }
+    .item.leido .titulo { font-weight: 400; color: var(--muted); }
+    .abrir-con { flex: none; align-self: flex-start; padding: 2px 8px; font-size: 12px; border-radius: 8px; }
+    .menu-abrir { position: absolute; z-index: 50; display: grid; gap: 2px; min-width: 220px; padding: 6px; background: var(--card);
+      border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+    .menu-abrir button { text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 8px; }
+    .menu-abrir button:hover { background: var(--chip); }
+    .menu-abrir a.btn { text-align: center; }
     .ics-fila { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
     .ics-fila > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .tabs-correo, .carpetas { flex-wrap: wrap; margin-bottom: 6px; }
@@ -290,7 +297,8 @@
   let verConfigCal = false;
 
   // Pestañas de correo: cuenta ('todas', 'gmail', 'ms…', 'ferozo') y carpeta.
-  const CARPETAS = [['noLeidos', 'Sin leer'], ['enviados', 'Enviados'], ['borradores', 'Borradores'], ['spam', 'Spam']];
+  const CARPETAS = [['noLeidos', 'Sin leer'], ['hoy', 'Hoy'], ['enviados', 'Enviados'], ['borradores', 'Borradores'], ['spam', 'Spam']];
+  const CARPETAS_TODAS = [['noLeidos', 'Sin leer'], ['hoy', 'Hoy']]; // en "Todas" (todas las cuentas juntas)
   let correoCuenta = 'todas', correoCarpeta = 'noLeidos';
   let carpetasCache = {}; // 'cuenta|carpeta' -> { total, correos } o { cargando } o { error }
 
@@ -351,9 +359,10 @@
   // ----- Correo por cuenta y carpeta -----
   function verCorreo(cuenta, carpeta) {
     correoCuenta = cuenta;
-    correoCarpeta = cuenta === 'todas' ? 'noLeidos' : (carpeta || correoCarpeta);
+    correoCarpeta = cuenta === 'todas' ? (carpeta === 'hoy' ? 'hoy' : 'noLeidos') : (carpeta || correoCarpeta);
+    limites.correo = LIMITE_LISTA; // cada pestaña empieza mostrando 15
     const clave = correoCuenta + '|' + correoCarpeta;
-    if (correoCuenta !== 'todas' && correoCarpeta !== 'noLeidos' && !carpetasCache[clave]) {
+    if (correoCarpeta !== 'noLeidos' && !carpetasCache[clave]) {
       carpetasCache[clave] = { cargando: true };
       run()
         .withSuccessHandler(r => { carpetasCache[clave] = r; pintar(); })
@@ -386,13 +395,19 @@
 
   function setFiltro(f) { filtroAgenda = f; pintar(); }
 
-  // Agenda, correo y tareas muestran 15 elementos; "Mostrar más" despliega el resto.
+  // Agenda, correo y tareas muestran de 15 en 15: cada "Mostrar más" agrega 15; al final, "Mostrar menos".
   const LIMITE_LISTA = 15;
-  const verTodo = { agenda: false, correo: false, tareas: false };
-  function alternarMas(clave) { verTodo[clave] = !verTodo[clave]; pintar(); }
-  const recortar = (clave, lista) => verTodo[clave] ? lista : lista.slice(0, LIMITE_LISTA);
-  const botonMas = (clave, total) => total <= LIMITE_LISTA ? '' :
-    `<button class="mas" onclick="alternarMas('${clave}')">${verTodo[clave] ? 'Mostrar menos' : 'Mostrar más (' + (total - LIMITE_LISTA) + ')'}</button>`;
+  const limites = { agenda: LIMITE_LISTA, correo: LIMITE_LISTA, tareas: LIMITE_LISTA };
+  function mostrarMas(clave) { limites[clave] += LIMITE_LISTA; pintar(); }
+  function mostrarMenos(clave) { limites[clave] = LIMITE_LISTA; pintar(); }
+  const recortar = (clave, lista) => lista.slice(0, limites[clave]);
+  const botonMas = (clave, total) => {
+    if (total <= LIMITE_LISTA) return '';
+    const faltan = total - limites[clave];
+    return faltan > 0
+      ? `<button class="mas" onclick="mostrarMas('${clave}')">Mostrar más (${Math.min(LIMITE_LISTA, faltan)} de ${faltan} restantes)</button>`
+      : `<button class="mas" onclick="mostrarMenos('${clave}')">Mostrar menos</button>`;
+  };
 
   // ----- Elegir calendarios de Google -----
   function alternarConfigCal() { verConfigCal = !verConfigCal; pintar(); }
@@ -471,6 +486,77 @@
   // Mientras escribes en un formulario de la agenda no se redibuja el panel.
   const editando = () => verNuevo || verConfigCal;
 
+  // ----- "Abrir con…" en cada correo: navegador, app del celular u Outlook clásico (escritorio) -----
+  let CORREOS_VIS = [];
+  const ES_MOVIL = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const ES_ANDROID = /Android/i.test(navigator.userAgent);
+
+  function opcionesAbrir(c) {
+    const web = ['🌐', c.fuente === 'Ferozo' ? 'Webmail de Ferozo' : c.fuente === 'Gmail' ? 'Gmail en el navegador' : 'Outlook en el navegador',
+      () => window.open(c.enlace, '_blank')];
+    if (c.fuente === 'Gmail') {
+      return ES_MOVIL ? [['📱', 'App de Gmail', () => { location.href = ES_ANDROID
+        ? 'intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.google.android.gm;end'
+        : 'googlegmail://'; }], web] : [web];
+    }
+    if (c.fuente === 'Ferozo') {
+      // Outlook clásico no tiene un identificador para correos IMAP: se abre la bandeja de entrada.
+      return ES_MOVIL ? [web] : [web, ['🖥️', 'Outlook clásico (bandeja de entrada)', () => {
+        location.href = 'outlook:Inbox';
+        toast('Busca el correo en la cuenta de Ferozo dentro de Outlook.');
+      }]];
+    }
+    // Outlook y Microsoft 365
+    return ES_MOVIL ? [['📱', 'App de Outlook', () => { location.href = 'ms-outlook://'; }], web]
+      : [['🖥️', 'Outlook clásico', () => abrirEnOutlookClasico(c)], web];
+  }
+
+  function cerrarMenuAbrir() { const m = document.getElementById('menuAbrir'); if (m) m.remove(); }
+
+  function abrirCon(ev, i) {
+    ev.stopPropagation();
+    const yaAbierto = document.getElementById('menuAbrir');
+    cerrarMenuAbrir();
+    if (yaAbierto && yaAbierto.dataset.i === String(i)) return;
+    const c = CORREOS_VIS[i];
+    const menu = document.createElement('div');
+    menu.id = 'menuAbrir'; menu.className = 'menu-abrir'; menu.dataset.i = i;
+    opcionesAbrir(c).forEach(([icono, texto, accion]) => {
+      const b = document.createElement('button');
+      b.textContent = icono + ' ' + texto;
+      b.onclick = e => { e.stopPropagation(); accion(); if (!b.dataset.esperar) cerrarMenuAbrir(); };
+      if (texto === 'Outlook clásico') b.dataset.esperar = '1';
+      menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+    const r = ev.currentTarget.getBoundingClientRect();
+    menu.style.top = (r.bottom + window.scrollY + 4) + 'px';
+    menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, document.documentElement.clientWidth - menu.offsetWidth - 8) + window.scrollX) + 'px';
+  }
+  document.addEventListener('click', e => { if (!e.target.closest('#menuAbrir')) cerrarMenuAbrir(); });
+
+  /** Pide el EntryID del correo y muestra el enlace outlook:… (un clic tuyo lo abre en Outlook clásico). */
+  function abrirEnOutlookClasico(c) {
+    if (!c.id) { cerrarMenuAbrir(); toast('Pulsa ↻ Actualizar en Correo y vuelve a intentarlo.'); return; }
+    const menu = document.getElementById('menuAbrir');
+    if (menu) menu.innerHTML = '<div class="meta" style="padding:6px 10px">Buscando el correo en Outlook…</div>';
+    run()
+      .withSuccessHandler(id => {
+        const m = document.getElementById('menuAbrir');
+        if (!m) return;
+        m.innerHTML = '';
+        const a = document.createElement('a');
+        a.href = 'outlook:' + id; a.className = 'btn primario'; a.textContent = '🖥️ Abrir este correo en Outlook clásico';
+        a.onclick = () => setTimeout(cerrarMenuAbrir, 300);
+        const nota = document.createElement('div');
+        nota.className = 'meta'; nota.style.padding = '6px 4px 0';
+        nota.textContent = 'Necesita habilitar-enlaces-outlook.reg y la cuenta configurada en Outlook clásico.';
+        m.append(a, nota);
+      })
+      .withFailureHandler(e => { cerrarMenuAbrir(); toast('Error: ' + e.message); })
+      .idOutlookClasico(c.cuentaId, c.id);
+  }
+
   // ----- Correo nuevo cada 2 minutos y con el botón ↻ (solo el correo, sin recargar todo el panel) -----
   function refrescarCorreo(manual) {
     if (!SESION || !DATOS) return;
@@ -483,7 +569,7 @@
         Object.assign(DATOS, c); carpetasCache = {};
         if (!editando()) pintar();
         // Si está abierta otra carpeta (Enviados, Borradores, Spam), también se vuelve a cargar.
-        if (correoCuenta !== 'todas' && correoCarpeta !== 'noLeidos') verCorreo(correoCuenta, correoCarpeta);
+        if (correoCarpeta !== 'noLeidos') { const lim = limites.correo; verCorreo(correoCuenta, correoCarpeta); limites.correo = lim; }
         if (manual) toast('Correo actualizado');
       })
       .withFailureHandler(e => { if (manual) { toast('Error: ' + e.message); if (!editando()) pintar(); } })
@@ -760,7 +846,7 @@
         </div></div>` : '';
     // Los 15 primeros entre hoy y los próximos días.
     const hoyVisibles = recortar('agenda', hoy);
-    const proximosVisibles = verTodo.agenda ? proximos : proximos.slice(0, Math.max(0, LIMITE_LISTA - hoyVisibles.length));
+    const proximosVisibles = proximos.slice(0, Math.max(0, limites.agenda - hoyVisibles.length));
     const porDia = {};
     proximosVisibles.forEach(e => { const k = inicioDia(e.inicio); (porDia[k] = porDia[k] || []).push(e); });
     const proximosHtml = Object.keys(porDia).sort().map(k =>
@@ -771,10 +857,15 @@
       `<button class="${filtroAgenda === f ? 'on' : ''}" onclick="setFiltro('${f}')">${f === 'todos' ? 'Todos' : f}</button>`).join('');
 
     // ----- Correo -----
-    const correo = c => `<li class="item"><div class="barra" style="background:${colorDe(c.fuente)}"></div>
+    CORREOS_VIS = [];
+    const correo = c => {
+      const i = CORREOS_VIS.push(c) - 1;
+      return `<li class="item${c.leido ? ' leido' : ''}"><div class="barra" style="background:${colorDe(c.fuente)}"></div>
       <div class="cuerpo"><div class="meta">${c.cuenta && correoCuenta === 'todas' ? `<span class="tag" style="background:${colorDe(c.fuente)}">${esc(c.cuenta)}</span> ` : ''}${esc(c.de)} · ${esc(diaCorto(c.fecha))} ${esc(hora(c.fecha))}</div>
       <a class="titulo" href="${esc(c.enlace)}" target="_blank">${c.importante ? '❗ ' : ''}${esc(c.asunto)}</a>
-      <div class="vista">${esc(c.vista)}</div></div></li>`;
+      <div class="vista">${esc(c.vista)}</div></div>
+      <button class="icono-btn abrir-con" title="Abrir con…" onclick="abrirCon(event, ${i})">Abrir ▾</button></li>`;
+    };
 
     // ----- Tareas -----
     const tarea = t => {
@@ -798,7 +889,7 @@
     if (correoCuenta !== 'todas' && !cuentas.some(c => c.id === correoCuenta)) { correoCuenta = 'todas'; correoCarpeta = 'noLeidos'; }
     const cuentaSel = cuentas.find(c => c.id === correoCuenta);
     let listaCorreo, masCorreo = '';
-    if (correoCuenta === 'todas' || correoCarpeta === 'noLeidos') {
+    if (correoCarpeta === 'noLeidos') {
       const lista = d.correos.filter(c => correoCuenta === 'todas' || c.cuentaId === correoCuenta);
       listaCorreo = recortar('correo', lista).map(correo).join('') || '<li class="vacio">Bandeja al día ✨</li>';
       masCorreo = botonMas('correo', lista.length);
@@ -812,8 +903,8 @@
     const tabsCorreo = [`<button class="${correoCuenta === 'todas' ? 'on' : ''}" onclick="verCorreo('todas')">Todas · ${totalNoLeidos}</button>`]
       .concat(cuentas.map(c => `<button class="${correoCuenta === c.id ? 'on' : ''}" title="${esc(c.direccion)}"
         onclick="verCorreo('${esc(c.id)}', 'noLeidos')"><span class="punto" style="background:${c.color}"></span> ${esc(c.nombre)} · ${c.noLeidos}</button>`)).join('');
-    const carpetasCorreo = cuentaSel ? CARPETAS.map(([k, n]) =>
-      `<button class="${correoCarpeta === k ? 'on' : ''}" onclick="verCorreo('${esc(cuentaSel.id)}', '${k}')">${n}</button>`).join('') : '';
+    const carpetasCorreo = (cuentaSel ? CARPETAS : CARPETAS_TODAS).map(([k, n]) =>
+      `<button class="${correoCarpeta === k ? 'on' : ''}" onclick="verCorreo('${esc(cuentaSel ? cuentaSel.id : 'todas')}', '${k}')">${n}</button>`).join('');
     const pieCorreo = cuentaSel ? `<div class="meta" style="margin-top:6px">${esc(cuentaSel.direccion)}${cuentaSel.actualizado
       ? ' · actualizado ' + esc(hora(cuentaSel.actualizado)) : ''}</div>` : '';
 

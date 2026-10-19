@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel de Vida</title>
+  <meta name="robots" content="noindex">
+  <style>
+    :root {
+      --bg: #f5f6f8; --card: #ffffff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
+      --google: #1a73e8; --ms: #0078d4; --gmail: #ea4335; --ok: #16a34a; --warn: #d97706; --bad: #dc2626;
+      --chip: #f3f4f6; --accent: #111827; --accent-text: #ffffff; --extra: #7c3aed;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1115; --card: #181b21; --text: #e5e7eb; --muted: #9ca3af; --line: #2a2f38;
+        --chip: #232832; --accent: #e5e7eb; --accent-text: #111827;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font: 14px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    a { color: inherit; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
+
+    header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
+    h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+    .fecha { color: var(--muted); margin-top: 2px; }
+    .clima { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line);
+      border-radius: 12px; padding: 8px 14px; }
+    .clima .temp { font-size: 22px; font-weight: 600; }
+    .clima small { color: var(--muted); display: block; }
+    .acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+    button, .btn { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text);
+      padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+    button.primario, .btn.primario { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    button:disabled { opacity: .6; cursor: default; }
+    a.btn { display: inline-block; text-decoration: none; }
+    button.mas { display: block; width: 100%; margin-top: 10px; font-size: 13px; color: var(--muted); }
+    .acceso { max-width: 460px; margin: 40px auto; text-align: center; }
+    .acceso p { color: var(--muted); }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+    .stat b { font-size: 22px; display: block; }
+    .stat span { color: var(--muted); font-size: 12px; }
+
+    .grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 16px; }
+    @media (max-width: 1000px) { .grid { grid-template-columns: 1fr 1fr; } .grid .agenda { grid-column: 1 / -1; } }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+    .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 0 6px; }
+    .filtros { display: flex; gap: 4px; }
+    .filtros button { padding: 2px 10px; font-size: 12px; border-radius: 999px; background: var(--chip); border-color: transparent; }
+    .filtros button.on { background: var(--accent); color: var(--accent-text); }
+
+    .lista { list-style: none; margin: 0; padding: 0; }
+    .item { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+    .item:first-child { border-top: 0; }
+    .barra { width: 3px; border-radius: 3px; flex: none; }
+    .hora { width: 92px; flex: none; color: var(--muted); font-size: 12px; padding-top: 1px; font-variant-numeric: tabular-nums; }
+    .cuerpo { min-width: 0; flex: 1; }
+    .titulo { font-weight: 600; overflow-wrap: anywhere; }
+    .meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .vista { color: var(--muted); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .ahora { background: color-mix(in srgb, var(--google) 10%, transparent); border-radius: 8px; }
+    .pasado { opacity: .5; }
+    .tag { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; color: #fff; vertical-align: 1px; }
+    .vacio { color: var(--muted); padding: 8px 0; }
+
+    .tarea input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--ok); cursor: pointer; flex: none; }
+    .vencida { color: var(--bad); }
+    .hecha .titulo { text-decoration: line-through; opacity: .5; }
+
+    .herramientas { margin-top: 16px; }
+    .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+    .tool { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
+    .punto { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+    .enlaces { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .enlaces a { background: var(--chip); padding: 6px 12px; border-radius: 999px; }
+    .aviso { background: color-mix(in srgb, var(--warn) 15%, var(--card)); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+      border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+    .cargando { color: var(--muted); padding: 60px 0; text-align: center; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--accent-text);
+      padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+    .toast.ver { opacity: 1; }
+
+    .ia { margin-bottom: 16px; }
+    .ia-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .ia-form input { flex: 1; min-width: 220px; font: inherit; color: var(--text); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .chips button { padding: 4px 10px; font-size: 12px; border-radius: 999px; background: var(--chip); border-color: transparent; }
+    .ia-resp { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--bg); line-height: 1.55; }
+    .ia-resp:empty { display: none; }
+    .ia-resp p { margin: 4px 0; }
+    .ia-resp ul { margin: 4px 0; padding-left: 20px; }
+    .ia-resp .pregunta { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .ia-resp .enlace { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .ia-resp .enlace a { color: var(--google); }
+    .pensando { color: var(--muted); }
+
+    .icono-btn { padding: 2px 8px; font-size: 13px; border-radius: 8px; background: var(--chip); border-color: transparent; }
+    .cal-config { background: var(--bg); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+    .cal-config label { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
+    .cal-config .acciones { margin-top: 8px; }
+    .ics-fila { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+    .ics-fila > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .tabs-correo, .carpetas { flex-wrap: wrap; margin-bottom: 6px; }
+    .tabs-correo button { display: inline-flex; align-items: center; gap: 5px; }
+    .carpetas button { background: transparent; border: 1px solid var(--line); }
+    .ics-form { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .ics-form input { flex: 1 1 160px; min-width: 0; font: inherit; color: var(--text); background: var(--card);
+      border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+    .archivos { margin-top: 16px; }
+    .archivos .lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); column-gap: 16px; }
+    .archivos .item { align-items: center; }
+    .archivos .item:nth-child(-n+2) { border-top: 0; }
+    .ext { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-size: 10px; font-weight: 700;
+      color: #fff; flex: none; text-transform: uppercase; }
+    .visor { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; padding: 16px; z-index: 10; }
+    .visor.ver { display: flex; }
+    .visor-caja { background: var(--card); border-radius: 14px; flex: 1; display: flex; flex-direction: column; overflow: hidden; max-width: 1200px; margin: auto; height: 100%; }
+    .visor-caja header { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line); align-items: center; flex-wrap: nowrap; }
+    .visor-caja iframe { flex: 1; border: 0; width: 100%; background: #fff; }
+
+    .od-cuerpo { flex: 1; overflow: auto; padding: 12px 16px; }
+    .od-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .od-barra input { flex: 1 1 220px; min-width: 0; font: inherit; color: var(--text); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+    .od-ruta { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .od-ruta a { color: var(--google); cursor: pointer; }
+    .od-lista .item { align-items: center; cursor: pointer; border-radius: 8px; padding: 8px 6px; }
+    .od-lista .item:hover { background: var(--chip); }
+    .od-icono { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-size: 18px; flex: none; background: var(--chip); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header id="cabecera">
+      <div>
+        <h1 id="saludo">Panel de Vida</h1>
+        <div class="fecha" id="fecha"></div>
+      </div>
+      <div id="clima"></div>
+      <div class="acciones">
+        <span id="msBoton"></span>
+        <button id="btnResumen" onclick="enviarResumen()">✉️ Enviar resumen</button>
+        <button class="primario" id="btnActualizar" onclick="cargar()">↻ Actualizar</button>
+        <button onclick="salir()" title="Cerrar la sesión en este navegador">🔒 Salir</button>
+      </div>
+    </header>
+
+    <div id="avisos"></div>
+    <div id="ia"></div>
+    <div id="contenido" class="cargando">Cargando tu día…</div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <div class="visor" id="visor" onclick="if (event.target === this) cerrarVisor()">
+    <div class="visor-caja">
+      <header>
+        <b id="visorTitulo" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b>
+        <span class="acciones" style="flex:none">
+          <a class="btn" id="visorAbrir" target="_blank">Abrir en Office</a>
+          <button onclick="cerrarVisor()">✕</button>
+        </span>
+      </header>
+      <iframe id="visorMarco" title="Vista previa del archivo"></iframe>
+    </div>
+  </div>
+  <div class="visor" id="onedrive" onclick="if (event.target === this) cerrarOneDrive()">
+    <div class="visor-caja">
+      <header>
+        <b>☁️ OneDrive</b>
+        <span class="acciones" style="flex:none">
+          <a class="btn" id="odAbrirWeb" target="_blank">Abrir OneDrive ↗</a>
+          <button onclick="cerrarOneDrive()">✕</button>
+        </span>
+      </header>
+      <div class="od-cuerpo">
+        <div class="filtros" id="odCuentas" style="flex-wrap:wrap;margin-bottom:10px"></div>
+        <form class="od-barra" onsubmit="event.preventDefault(); odBuscar(this.q.value)">
+          <input name="q" id="odQ" autocomplete="off" placeholder="Buscar documentos por nombre o contenido…">
+          <button class="primario">Buscar</button>
+          <button type="button" onclick="document.getElementById('odQ').value=''; odCarpeta(null, 'Inicio', true)">Inicio</button>
+        </form>
+        <div class="od-ruta" id="odRuta"></div>
+        <ul class="lista od-lista" id="odLista"></ul>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let DATOS = null;
+  let filtroAgenda = 'todos';
+  let iaIniciada = false;
+  const PREGUNTA_INICIAL = (new URLSearchParams(location.search).get('pregunta') || '');
+  const TOKEN_INICIAL = '';
+  const ERROR_ACCESO = '';
+
+  // ----- Acceso: sesión de Google guardada en este navegador (ver Acceso.gs) -----
+  // La misma página funciona dentro de Apps Script (/exec) y en GitHub Pages. En GitHub Pages habla con
+  // /exec por fetch sin cookies de Google, así abre aunque haya varias cuentas de Google en el navegador.
+  const EN_APPS_SCRIPT = typeof google !== 'undefined' && !!(google.script && google.script.run);
+  const URL_SERVIDOR = 'https://script.google.com/macros/s/AKfycbym0wF2UGBJJo9vnisOmYLtQIqBBrxYiT9J1YhG_L6RXe5O_R0dZeuYz59h-PRgpKEK/exec';
+  let SESION = TOKEN_INICIAL;
+  try { if (SESION) localStorage.setItem('panelSesion', SESION); else SESION = localStorage.getItem('panelSesion') || ''; } catch (e) {}
+
+  /** Llama a servidorPanel() (Acceso.gs) y devuelve una promesa. */
+  function servidor(datos) {
+    if (EN_APPS_SCRIPT) {
+      return new Promise((ok, mal) => google.script.run.withSuccessHandler(ok).withFailureHandler(mal).servidorPanel(datos));
+    }
+    return fetch(URL_SERVIDOR, { method: 'POST', body: JSON.stringify(datos), credentials: 'omit' })
+      .then(r => r.json())
+      .then(r => r.ok ? r.resultado : Promise.reject(new Error(r.error)));
+  }
+
+  /** Igual que google.script.run, pero cada llamada pasa por api() con la sesión. */
+  function run() {
+    let ok = () => {}, err = e => toast('Error: ' + e.message);
+    const p = new Proxy({}, { get(_, nombre) {
+      if (nombre === 'withSuccessHandler') return f => { ok = f; return p; };
+      if (nombre === 'withFailureHandler') return f => { err = f; return p; };
+      return (...args) => servidor({ accion: 'api', token: SESION, metodo: nombre, args: args })
+        .then(ok, e => String(e && e.message).indexOf('SESION:') >= 0 ? pedirSesion() : err(e));
+    } });
+    return p;
+  }
+
+  function pedirSesion(mensaje) {
+    SESION = ''; DATOS = null;
+    try { localStorage.removeItem('panelSesion'); } catch (e) {}
+    document.getElementById('cabecera').style.display = 'none';
+    document.getElementById('avisos').innerHTML = document.getElementById('ia').innerHTML = '';
+    const c = document.getElementById('contenido');
+    c.className = '';
+    c.innerHTML = '<section class="card acceso"><h2>🔒 Panel de Vida</h2>' +
+      '<p>Inicia sesión con tu cuenta de Google. Puedes elegirla aunque tengas otras cuentas abiertas en este navegador.</p>' +
+      (mensaje ? '<p class="vencida">' + esc(mensaje) + '</p>' : '') +
+      '<a class="btn primario" id="btnLogin" target="_top">Preparando…</a></section>';
+    servidor({ accion: 'urlInicioSesion', destino: EN_APPS_SCRIPT ? 'exec' : 'pagina' })
+      .then(url => { const a = document.getElementById('btnLogin'); a.href = url; a.textContent = 'Iniciar sesión con Google'; })
+      .catch(e => { document.getElementById('btnLogin').textContent = e.message; });
+  }
+
+  function salir() {
+    if (!confirm('¿Cerrar la sesión del panel en este navegador?')) return;
+    servidor({ accion: 'cerrarSesion', token: SESION }).then(() => pedirSesion('Sesión cerrada.'));
+  }
+
+  /** Al abrir: en GitHub Pages, Google vuelve con #id_token=…&state=… después de elegir la cuenta. */
+  function iniciar() {
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (!EN_APPS_SCRIPT && (h.get('id_token') || h.get('error'))) {
+      history.replaceState(null, '', location.pathname + location.search);
+      if (h.get('error')) return pedirSesion('No se completó el inicio de sesión.');
+      document.getElementById('contenido').textContent = 'Iniciando sesión…';
+      return servidor({ accion: 'iniciarSesion', id_token: h.get('id_token'), state: h.get('state') })
+        .then(t => { SESION = t; try { localStorage.setItem('panelSesion', t); } catch (e) {} cargar(); })
+        .catch(e => pedirSesion(e.message));
+    }
+    if (SESION) cargar(); else pedirSesion(ERROR_ACCESO);
+  }
+  const ATAJOS_IA = ['¿Qué priorizo hoy?', '¿Tengo huecos libres esta tarde?', 'Resume mi semana',
+    'Planifica mi día por bloques de tiempo', '¿Cuántos correos tengo pendientes por cuenta?'];
+  const COLORES = { Google: 'var(--google)', Microsoft: 'var(--ms)', Gmail: 'var(--gmail)', Outlook: 'var(--ms)', Ferozo: 'var(--extra)' };
+  const colorDe = f => COLORES[f] || 'var(--extra)';
+  let verConfigCal = false;
+
+  // Pestañas de correo: cuenta ('todas', 'gmail', 'ms…', 'ferozo') y carpeta.
+  const CARPETAS = [['noLeidos', 'Sin leer'], ['enviados', 'Enviados'], ['borradores', 'Borradores'], ['spam', 'Spam']];
+  let correoCuenta = 'todas', correoCarpeta = 'noLeidos';
+  let carpetasCache = {}; // 'cuenta|carpeta' -> { total, correos } o { cargando } o { error }
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const hora = ms => new Date(ms).toLocaleTimeString('es-CR', { hour: 'numeric', minute: '2-digit' });
+  const diaLargo = ms => new Date(ms).toLocaleDateString('es-CR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const diaCorto = ms => new Date(ms).toLocaleDateString('es-CR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const inicioDia = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('ver');
+    setTimeout(() => t.classList.remove('ver'), 2800);
+  }
+
+  function aplicarDatos(d) {
+    DATOS = d; carpetasCache = {};
+    try { pintar(); } catch (err) {
+      document.getElementById('contenido').innerHTML = '<div class="aviso">No se pudo mostrar el panel: ' +
+        esc(err.message) + '<br><small>' + esc(String(err.stack || '').split('\n').slice(0, 3).join(' | ')) + '</small></div>';
+      return;
+    }
+    if (!iaIniciada) { iaIniciada = true; iniciarIA(); }
+  }
+
+  let primeraCarga = true;
+  function cargar() {
+    document.getElementById('cabecera').style.display = '';
+    const b = document.getElementById('btnActualizar');
+    b.disabled = true; b.textContent = 'Actualizando…';
+    // Al abrir: muestra al instante la última versión preparada y luego la reemplaza por la nueva.
+    if (primeraCarga) {
+      primeraCarga = false;
+      run().withSuccessHandler(d => { if (d && !DATOS) aplicarDatos(d); }).getDashboardRapido();
+    }
+    run()
+      .withSuccessHandler(d => {
+        b.disabled = false; b.textContent = '↻ Actualizar';
+        aplicarDatos(d);
+      })
+      .withFailureHandler(e => {
+        b.disabled = false; b.textContent = '↻ Actualizar';
+        if (DATOS) { toast('No se pudo actualizar: ' + e.message); return; }
+        document.getElementById('contenido').innerHTML = '<div class="aviso">No se pudo cargar el panel: ' + esc(e.message) + '</div>';
+      })
+      .getDashboard();
+  }
+
+  function enviarResumen() {
+    const b = document.getElementById('btnResumen');
+    b.disabled = true;
+    run()
+      .withSuccessHandler(dest => { b.disabled = false; toast('Resumen enviado a ' + dest); })
+      .withFailureHandler(e => { b.disabled = false; toast('Error: ' + e.message); })
+      .enviarResumenAhora();
+  }
+
+  // ----- Correo por cuenta y carpeta -----
+  function verCorreo(cuenta, carpeta) {
+    correoCuenta = cuenta;
+    correoCarpeta = cuenta === 'todas' ? 'noLeidos' : (carpeta || correoCarpeta);
+    const clave = correoCuenta + '|' + correoCarpeta;
+    if (correoCuenta !== 'todas' && correoCarpeta !== 'noLeidos' && !carpetasCache[clave]) {
+      carpetasCache[clave] = { cargando: true };
+      run()
+        .withSuccessHandler(r => { carpetasCache[clave] = r; pintar(); })
+        .withFailureHandler(e => { carpetasCache[clave] = { error: e.message }; pintar(); })
+        .correosCarpeta(correoCuenta, correoCarpeta);
+    }
+    pintar();
+  }
+
+  function quitarCuentaMs(id, email) {
+    if (!confirm('¿Desconectar ' + email + ' del panel?')) return;
+    run()
+      .withSuccessHandler(() => { toast('Cuenta desconectada'); cargar(); })
+      .withFailureHandler(e => toast('Error: ' + e.message))
+      .quitarCuentaMicrosoft(id);
+  }
+
+  function completar(el, fuente, listaId, id, cuentaId) {
+    const li = el.closest('.item');
+    li.classList.add('hecha'); el.disabled = true;
+    run()
+      .withSuccessHandler(() => {
+        DATOS.tareas = DATOS.tareas.filter(t => t.id !== id);
+        setTimeout(pintar, 600);
+        toast('Tarea completada ✓');
+      })
+      .withFailureHandler(e => { li.classList.remove('hecha'); el.disabled = false; el.checked = false; toast('Error: ' + e.message); })
+      .completarTarea(fuente, listaId, id, cuentaId || '');
+  }
+
+  function setFiltro(f) { filtroAgenda = f; pintar(); }
+
+  // Agenda, correo y tareas muestran 15 elementos; "Mostrar más" despliega el resto.
+  const LIMITE_LISTA = 15;
+  const verTodo = { agenda: false, correo: false, tareas: false };
+  function alternarMas(clave) { verTodo[clave] = !verTodo[clave]; pintar(); }
+  const recortar = (clave, lista) => verTodo[clave] ? lista : lista.slice(0, LIMITE_LISTA);
+  const botonMas = (clave, total) => total <= LIMITE_LISTA ? '' :
+    `<button class="mas" onclick="alternarMas('${clave}')">${verTodo[clave] ? 'Mostrar menos' : 'Mostrar más (' + (total - LIMITE_LISTA) + ')'}</button>`;
+
+  // ----- Elegir calendarios de Google -----
+  function alternarConfigCal() { verConfigCal = !verConfigCal; pintar(); }
+
+  function guardarCal() {
+    const ids = [...document.querySelectorAll('.cal-config input:checked')].map(i => i.value);
+    const b = document.getElementById('btnGuardarCal');
+    b.disabled = true; b.textContent = 'Guardando…';
+    run()
+      .withSuccessHandler(() => { verConfigCal = false; toast('Calendarios guardados'); cargar(); })
+      .withFailureHandler(e => { b.disabled = false; b.textContent = 'Guardar'; toast('Error: ' + e.message); })
+      .guardarCalendarios(ids);
+  }
+
+  // ----- Calendarios compartidos por enlace ICS -----
+  function agregarIcs() {
+    const nombre = document.getElementById('icsNombre').value;
+    const url = document.getElementById('icsUrl').value;
+    const b = document.getElementById('btnIcs');
+    b.disabled = true; b.textContent = 'Comprobando…';
+    run()
+      .withSuccessHandler(() => { toast('Calendario agregado'); cargar(); })
+      .withFailureHandler(e => { b.disabled = false; b.textContent = 'Agregar'; toast('Error: ' + e.message); })
+      .agregarCalendarioIcs(nombre, url);
+  }
+
+  function quitarIcs(i) {
+    if (!confirm('¿Quitar "' + DATOS.calendariosIcs[i].nombre + '" del panel?')) return;
+    run()
+      .withSuccessHandler(() => { toast('Calendario quitado'); cargar(); })
+      .withFailureHandler(e => toast('Error: ' + e.message))
+      .quitarCalendarioIcs(i);
+  }
+
+  // ----- Archivos de Microsoft 365 -----
+  function abrirArchivo(i) {
+    const a = DATOS.archivos[i];
+    document.getElementById('visorTitulo').textContent = a.nombre;
+    document.getElementById('visorAbrir').href = a.enlace;
+    document.getElementById('visorMarco').src = 'about:blank';
+    document.getElementById('visor').classList.add('ver');
+    run()
+      .withSuccessHandler(url => { document.getElementById('visorMarco').src = url; })
+      .withFailureHandler(e => { cerrarVisor(); toast('Sin vista previa: ' + e.message); window.open(a.enlace, '_blank'); })
+      .vistaPreviaArchivo(a.cuentaId, a.driveId, a.id);
+  }
+
+  function cerrarVisor() {
+    document.getElementById('visor').classList.remove('ver');
+    document.getElementById('visorMarco').src = 'about:blank';
+  }
+
+  const COLOR_EXT = { doc: '#2b579a', docx: '#2b579a', xls: '#217346', xlsx: '#217346', csv: '#217346',
+    ppt: '#d24726', pptx: '#d24726', pdf: '#b30b00', one: '#7719aa' };
+
+  // ----- Explorador de OneDrive -----
+  let odCuenta = null, odRuta = [];
+  const ICONO_EXT = { doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', csv: '📗', ppt: '📙', pptx: '📙', pdf: '📕',
+    jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', mp4: '🎬', mov: '🎬', zip: '🗜️', txt: '📄', one: '📓' };
+  const tamano = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b > 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
+  const cuentasOneDrive = () => (DATOS && DATOS.microsoft.cuentas || []).filter(c => c.conectado);
+
+  function abrirOneDrive(cuentaId) {
+    const cuentas = cuentasOneDrive();
+    if (!cuentas.length) { toast('Conecta una cuenta de Microsoft primero'); return; }
+    odCuenta = cuentas.find(c => c.id === cuentaId) || cuentas[0];
+    document.getElementById('onedrive').classList.add('ver');
+    odPintarCuentas();
+    odCarpeta(null, 'Inicio', true);
+  }
+
+  function cerrarOneDrive() { document.getElementById('onedrive').classList.remove('ver'); }
+
+  function odPintarCuentas() {
+    document.getElementById('odCuentas').innerHTML = cuentasOneDrive().map(c =>
+      `<button class="${odCuenta && c.id === odCuenta.id ? 'on' : ''}" onclick="odCambiarCuenta('${esc(c.id)}')">${esc(c.tipo)} · ${esc(c.email)}</button>`).join('');
+    document.getElementById('odAbrirWeb').href = odCuenta.driveUrl || 'https://onedrive.live.com/';
+  }
+
+  function odCambiarCuenta(id) {
+    odCuenta = cuentasOneDrive().find(c => c.id === id);
+    document.getElementById('odQ').value = '';
+    odPintarCuentas();
+    odCarpeta(null, 'Inicio', true);
+  }
+
+  function odCargando(texto) { document.getElementById('odLista').innerHTML = `<li class="vacio">${esc(texto)}</li>`; }
+
+  function odCarpeta(id, nombre, reiniciar) {
+    if (reiniciar) odRuta = [];
+    const pos = odRuta.findIndex(r => r.id === id);
+    if (pos >= 0) odRuta = odRuta.slice(0, pos + 1); else odRuta.push({ id, nombre });
+    odPintarRuta();
+    odCargando('Cargando…');
+    run()
+      .withSuccessHandler(items => odPintarLista(items, 'Carpeta vacía.'))
+      .withFailureHandler(e => odCargando('⚠️ ' + e.message))
+      .carpetaOneDrive(odCuenta.id, id);
+  }
+
+  function odBuscar(q) {
+    q = String(q || '').trim();
+    if (!q) { odCarpeta(null, 'Inicio', true); return; }
+    odRuta = [];
+    document.getElementById('odRuta').innerHTML = 'Resultados de búsqueda para <b>' + esc(q) + '</b> en ' + esc(odCuenta.email);
+    odCargando('Buscando…');
+    run()
+      .withSuccessHandler(items => odPintarLista(items, 'No se encontraron documentos.', true))
+      .withFailureHandler(e => odCargando('⚠️ ' + e.message))
+      .buscarOneDrive(odCuenta.id, q);
+  }
+
+  function odPintarRuta() {
+    document.getElementById('odRuta').innerHTML = odRuta.map((r, i) => i === odRuta.length - 1
+      ? '<b>' + esc(r.nombre) + '</b>'
+      : `<a onclick="odIrRuta(${i})">${esc(r.nombre)}</a>`).join(' › ');
+  }
+
+  function odIrRuta(i) { const r = odRuta[i]; odCarpeta(r.id, r.nombre); }
+
+  let odItems = [];
+  function odPintarLista(items, vacio, conRuta) {
+    odItems = items || [];
+    document.getElementById('odLista').innerHTML = odItems.map((a, i) => {
+      const ext = (a.nombre.split('.').pop() || '').toLowerCase();
+      const icono = a.carpeta ? '📁' : (ICONO_EXT[ext] || '📄');
+      const meta = a.carpeta ? a.hijos + ' elementos' : esc(diaCorto(a.modificado)) + ' · ' + tamano(a.tamano);
+      return `<li class="item" onclick="odAbrir(${i})"><span class="od-icono">${icono}</span>
+        <div class="cuerpo"><div class="titulo">${esc(a.nombre)}</div>
+        <div class="meta">${meta}${conRuta && a.ruta ? ' · ' + esc(a.ruta) : ''}</div></div>
+        <span class="meta">${a.carpeta ? '›' : 'Abrir ↗'}</span></li>`;
+    }).join('') || `<li class="vacio">${esc(vacio)}</li>`;
+  }
+
+  function odAbrir(i) {
+    const a = odItems[i];
+    if (a.carpeta) odCarpeta(a.id, a.nombre);
+    else window.open(a.enlace, '_blank');
+  }
+
+  // ----- Asistente Gemini -----
+  function iniciarIA() {
+    const cont = document.getElementById('ia');
+    if (!DATOS.ia.activa) {
+      cont.innerHTML = '<div class="card ia"><h2>🤖 Asistente Gemini <span class="meta">inactivo</span></h2>' +
+        '<div class="meta">Agrega tu clave gratuita <b>GEMINI_API_KEY</b> en Propiedades del script para activarlo (ver LEEME.md).</div></div>';
+      return;
+    }
+    cont.innerHTML = '<section class="card ia"><h2>🤖 Asistente Gemini <span class="meta">nivel gratuito</span></h2>' +
+      '<form class="ia-form" onsubmit="event.preventDefault(); preguntar(this.q.value)">' +
+      '<input name="q" id="iaPregunta" autocomplete="off" placeholder="Pregúntale algo sobre tu día, agenda, tareas o correos…">' +
+      '<button class="primario" id="iaBoton">Preguntar</button>' +
+      '<button type="button" onclick="abrirEnGemini()" title="Copia tu pregunta con el contexto del día y abre gemini.google.com (tu suscripción)">Abrir en Gemini ↗</button></form>' +
+      '<div class="chips">' + ATAJOS_IA.map(a => '<button type="button" onclick="preguntar(this.textContent)">' + esc(a) + '</button>').join('') +
+      '<button type="button" onclick="briefing()">✨ Briefing del día</button></div>' +
+      '<div class="ia-resp" id="iaRespuesta"></div></section>';
+    run().withSuccessHandler(c => { CTX_GEMINI = c; }).contextoParaGemini();
+    if (PREGUNTA_INICIAL) preguntar(PREGUNTA_INICIAL);
+    else if (DATOS.ia.briefingAlAbrir) briefing();
+  }
+
+  // Abre gemini.google.com con tu cuenta de pago y deja en el portapapeles la pregunta + el contexto del día.
+  // Todo ocurre dentro del clic (el contexto ya se pidió al abrir) para que el navegador permita copiar y abrir la pestaña.
+  let CTX_GEMINI = null;
+  function abrirEnGemini() {
+    const q = document.getElementById('iaPregunta').value.trim() || 'Dame un briefing de mi día: prioridades, huecos libres y correo pendiente.';
+    const texto = CTX_GEMINI ? CTX_GEMINI.texto + q : q;
+    let copiado = false;
+    const area = document.createElement('textarea');
+    area.value = texto; area.style.position = 'fixed'; area.style.opacity = '0';
+    document.body.appendChild(area); area.select();
+    try { copiado = document.execCommand('copy'); } catch (e) {}
+    area.remove();
+    if (!copiado && navigator.clipboard) navigator.clipboard.writeText(texto).catch(() => {});
+    window.open('https://gemini.google.com/app' + (CTX_GEMINI && CTX_GEMINI.email ? '?authuser=' + encodeURIComponent(CTX_GEMINI.email) : ''), '_blank');
+    toast(copiado ? 'Pregunta copiada: en Gemini pulsa Ctrl+V (o mantén presionado y Pegar) y Enter.'
+                  : 'Se abrió Gemini. Si no se pegó, copia tu pregunta manualmente.');
+  }
+
+  function mostrarIA(pregunta, html) {
+    document.getElementById('iaRespuesta').innerHTML =
+      (pregunta ? '<div class="pregunta">' + esc(pregunta) + '</div>' : '') + html;
+  }
+
+  function llamarIA(pregunta, metodo, arg) {
+    const boton = document.getElementById('iaBoton');
+    boton.disabled = true;
+    mostrarIA(pregunta, '<span class="pensando">Gemini está pensando…</span>');
+    const runner = run()
+      .withSuccessHandler(t => {
+        boton.disabled = false;
+        const enlace = arg && DATOS.urlPanel
+          ? '<div class="enlace">🔗 <a href="' + esc(DATOS.urlPanel + '?pregunta=' + encodeURIComponent(arg)) +
+            '" target="_blank">Enlace directo a esta pregunta</a> (guárdalo en favoritos)</div>' : '';
+        mostrarIA(pregunta, md(t) + enlace);
+      })
+      .withFailureHandler(e => { boton.disabled = false; mostrarIA(pregunta, '<span class="vencida">⚠️ ' + esc(e.message) + '</span>'); });
+    arg ? runner[metodo](arg) : runner[metodo]();
+  }
+
+  function preguntar(q) {
+    q = String(q || '').trim();
+    if (!q) return;
+    document.getElementById('iaPregunta').value = q;
+    llamarIA(q, 'preguntarIA', q);
+  }
+
+  function briefing() { llamarIA('✨ Briefing del día', 'briefingIA'); }
+
+  /** Markdown mínimo: negritas, viñetas, listas numeradas y títulos. */
+  function md(texto) {
+    let html = '', lista = false;
+    String(texto).split('\n').forEach(l => {
+      const item = l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)$/);
+      const c = esc(item ? item[1] : l.replace(/^#+\s*/, ''))
+        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*([^*\s][^*]*?)\*/g, '<i>$1</i>');
+      if (item) { if (!lista) { html += '<ul>'; lista = true; } html += '<li>' + c + '</li>'; }
+      else { if (lista) { html += '</ul>'; lista = false; } if (c.trim()) html += '<p>' + c + '</p>'; }
+    });
+    return html + (lista ? '</ul>' : '');
+  }
+
+  function pintar() {
+    const d = DATOS;
+    const ahora = Date.now();
+    const h = new Date().getHours();
+    document.getElementById('saludo').textContent =
+      (h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches') + ', ' + d.nombre;
+    const fecha = diaLargo(ahora);
+    document.getElementById('fecha').textContent = fecha.charAt(0).toUpperCase() + fecha.slice(1) + ' · jornada desde las ' + d.inicioJornada;
+
+    document.getElementById('clima').innerHTML = d.clima
+      ? `<div class="clima"><span style="font-size:28px">${d.clima.icono}</span><div><span class="temp">${d.clima.actual}°</span>
+         <small>${esc(d.clima.descripcion)} · ${d.clima.min}°/${d.clima.max}° · 💧${d.clima.lluvia}%</small></div></div>` : '';
+
+    document.getElementById('msBoton').innerHTML = d.microsoft.urlNueva && !d.microsoft.conectado
+      ? `<a class="btn" href="${esc(d.microsoft.urlNueva)}" target="_blank">🔗 Conectar Microsoft</a>` : '';
+
+    document.getElementById('avisos').innerHTML = d.errores.length
+      ? '<div class="aviso">⚠️ ' + d.errores.map(e => '<b>' + esc(e.fuente) + '</b>: ' + esc(e.mensaje)).join('<br>') + '</div>' : '';
+
+    // ----- Agenda -----
+    const eventos = d.eventos.filter(e => filtroAgenda === 'todos' || e.fuente === filtroAgenda);
+    const hoy = eventos.filter(e => e.inicio < d.hoyFin && e.fin > d.hoyInicio);
+    const proximos = eventos.filter(e => e.inicio >= d.hoyFin);
+    const evento = e => {
+      const clase = e.todoElDia ? '' : (e.fin < ahora ? 'pasado' : (e.inicio <= ahora ? 'ahora' : ''));
+      const cuando = e.todoElDia ? 'Todo el día' : hora(e.inicio) + '<br>' + hora(e.fin);
+      return `<li class="item ${clase}"><div class="hora">${cuando}</div>
+        <div class="barra" style="background:${esc(e.color || colorDe(e.fuente))}"></div>
+        <div class="cuerpo">${e.enlace ? `<a class="titulo" href="${esc(e.enlace)}" target="_blank">${esc(e.titulo)}</a>`
+          : `<span class="titulo">${esc(e.titulo)}</span>`}
+        <div class="meta">${esc(e.calendario)}${e.lugar ? ' · 📍 ' + esc(e.lugar) : ''}</div></div></li>`;
+    };
+    const configCal = verConfigCal ? `<div class="cal-config">
+        ${(d.calendarios || []).map(c => `<label><input type="checkbox" value="${esc(c.id)}" ${c.visible ? 'checked' : ''}>
+          <span class="punto" style="background:${esc(c.color)}"></span>${esc(c.nombre)}</label>`).join('') || '<div class="meta">No hay calendarios.</div>'}
+        <div class="acciones"><button class="primario" id="btnGuardarCal" onclick="guardarCal()">Guardar</button>
+        <button onclick="alternarConfigCal()">Cancelar</button></div>
+        <h3>Calendarios compartidos (enlace ICS)</h3>
+        ${(d.calendariosIcs || []).map((c, i) => `<div class="ics-fila"><span class="punto" style="background:var(--extra)"></span>
+          <span>${esc(c.nombre)} <span class="meta">${esc(c.sitio)}</span></span>
+          <button class="icono-btn" onclick="quitarIcs(${i})">Quitar</button></div>`).join('') || '<div class="meta">Aún no hay calendarios compartidos.</div>'}
+        <div class="ics-form">
+          <input id="icsNombre" placeholder="Nombre (p. ej. Erika)" maxlength="40">
+          <input id="icsUrl" placeholder="Enlace .ics o webcal:// que te compartieron">
+          <button id="btnIcs" onclick="agregarIcs()">Agregar</button>
+        </div></div>` : '';
+    // Los 15 primeros entre hoy y los próximos días.
+    const hoyVisibles = recortar('agenda', hoy);
+    const proximosVisibles = verTodo.agenda ? proximos : proximos.slice(0, Math.max(0, LIMITE_LISTA - hoyVisibles.length));
+    const porDia = {};
+    proximosVisibles.forEach(e => { const k = inicioDia(e.inicio); (porDia[k] = porDia[k] || []).push(e); });
+    const proximosHtml = Object.keys(porDia).sort().map(k =>
+      `<h3>${esc(diaCorto(Number(k)))}</h3><ul class="lista">${porDia[k].map(evento).join('')}</ul>`).join('');
+    const fuentes = ['todos'].concat([...new Set(d.eventos.map(e => e.fuente))]);
+    if (fuentes.indexOf(filtroAgenda) < 0) filtroAgenda = 'todos';
+    const filtro = fuentes.map(f =>
+      `<button class="${filtroAgenda === f ? 'on' : ''}" onclick="setFiltro('${f}')">${f === 'todos' ? 'Todos' : f}</button>`).join('');
+
+    // ----- Correo -----
+    const correo = c => `<li class="item"><div class="barra" style="background:${colorDe(c.fuente)}"></div>
+      <div class="cuerpo"><div class="meta">${c.cuenta && correoCuenta === 'todas' ? `<span class="tag" style="background:${colorDe(c.fuente)}">${esc(c.cuenta)}</span> ` : ''}${esc(c.de)} · ${esc(diaCorto(c.fecha))} ${esc(hora(c.fecha))}</div>
+      <a class="titulo" href="${esc(c.enlace)}" target="_blank">${c.importante ? '❗ ' : ''}${esc(c.asunto)}</a>
+      <div class="vista">${esc(c.vista)}</div></div></li>`;
+
+    // ----- Tareas -----
+    const tarea = t => {
+      const vencida = t.vence != null && t.vence < d.hoyInicio;
+      const esHoy = t.vence != null && t.vence >= d.hoyInicio && t.vence < d.hoyFin;
+      const vence = t.vence == null ? '' : (vencida ? '<span class="vencida">Vencida · ' + esc(diaCorto(t.vence)) + '</span>'
+        : esHoy ? '<b>Hoy</b>' : esc(diaCorto(t.vence)));
+      return `<li class="item tarea"><input type="checkbox" title="Marcar como hecha"
+        onchange="completar(this, '${t.fuente}', '${esc(t.listaId)}', '${esc(t.id)}', '${esc(t.cuentaId || '')}')">
+        <div class="cuerpo"><div class="titulo">${esc(t.titulo)}</div>
+        <div class="meta"><span class="tag" style="background:${colorDe(t.fuente)}">${t.fuente === 'Google' ? 'G' : 'MS'}</span>
+        ${esc(t.lista)}${vence ? ' · ' + vence : ''}</div></div></li>`;
+    };
+    const tareasUrgentes = d.tareas.filter(t => t.vence != null && t.vence < d.hoyFin).length;
+
+    const siguiente = d.eventos.find(e => !e.todoElDia && e.inicio > ahora);
+    const totalNoLeidos = d.noLeidos.total;
+
+    // Lista de correo según la pestaña elegida.
+    const cuentas = d.cuentasCorreo || [];
+    if (correoCuenta !== 'todas' && !cuentas.some(c => c.id === correoCuenta)) { correoCuenta = 'todas'; correoCarpeta = 'noLeidos'; }
+    const cuentaSel = cuentas.find(c => c.id === correoCuenta);
+    let listaCorreo, masCorreo = '';
+    if (correoCuenta === 'todas' || correoCarpeta === 'noLeidos') {
+      const lista = d.correos.filter(c => correoCuenta === 'todas' || c.cuentaId === correoCuenta);
+      listaCorreo = recortar('correo', lista).map(correo).join('') || '<li class="vacio">Bandeja al día ✨</li>';
+      masCorreo = botonMas('correo', lista.length);
+    } else {
+      const r = carpetasCache[correoCuenta + '|' + correoCarpeta] || { cargando: true };
+      listaCorreo = r.cargando ? '<li class="vacio">Cargando…</li>'
+        : r.error ? `<li class="vacio vencida">⚠️ ${esc(r.error)}</li>`
+        : (recortar('correo', r.correos).map(correo).join('') || '<li class="vacio">Carpeta vacía.</li>');
+      if (r.correos) masCorreo = botonMas('correo', r.correos.length);
+    }
+    const tabsCorreo = [`<button class="${correoCuenta === 'todas' ? 'on' : ''}" onclick="verCorreo('todas')">Todas · ${totalNoLeidos}</button>`]
+      .concat(cuentas.map(c => `<button class="${correoCuenta === c.id ? 'on' : ''}" title="${esc(c.direccion)}"
+        onclick="verCorreo('${esc(c.id)}', 'noLeidos')"><span class="punto" style="background:${c.color}"></span> ${esc(c.nombre)} · ${c.noLeidos}</button>`)).join('');
+    const carpetasCorreo = cuentaSel ? CARPETAS.map(([k, n]) =>
+      `<button class="${correoCarpeta === k ? 'on' : ''}" onclick="verCorreo('${esc(cuentaSel.id)}', '${k}')">${n}</button>`).join('') : '';
+    const pieCorreo = cuentaSel ? `<div class="meta" style="margin-top:6px">${esc(cuentaSel.direccion)}${cuentaSel.actualizado
+      ? ' · actualizado ' + esc(hora(cuentaSel.actualizado)) : ''}</div>` : '';
+
+    // Cuentas de Microsoft conectadas.
+    const cuentasMs = (d.microsoft.cuentas || []).map(c => `<div class="ics-fila"><span class="punto" style="background:${c.conectado ? 'var(--ok)' : 'var(--bad)'}"></span>
+      <span>${esc(c.tipo)} · ${esc(c.email)}${c.conectado ? '' : ' <span class="vencida">(volver a conectar)</span>'}</span>
+      <button class="icono-btn" onclick="quitarCuentaMs('${esc(c.id)}', '${esc(c.email)}')">Quitar</button></div>`).join('');
+    const bloqueMs = d.microsoft.configurado
+      ? `<h3>Cuentas de Microsoft</h3>${cuentasMs || '<div class="meta">Ninguna conectada todavía.</div>'}
+         <div class="acciones" style="margin-top:8px"><a class="btn" href="${esc(d.microsoft.urlNueva)}" target="_blank">➕ Conectar cuenta de Microsoft (Outlook o 365)</a></div>
+         <div class="meta">Después de conectar, pulsa ↻ Actualizar.</div>`
+      : '';
+
+    document.getElementById('contenido').className = '';
+    document.getElementById('contenido').innerHTML = `
+      <div class="stats">
+        <div class="stat"><b>${hoy.length}</b><span>eventos hoy</span></div>
+        <div class="stat"><b>${siguiente ? esc(hora(siguiente.inicio)) : '—'}</b><span>${siguiente ? 'siguiente: ' + esc(siguiente.titulo) : 'sin más reuniones'}</span></div>
+        <div class="stat"><b>${totalNoLeidos}</b><span>correos sin leer</span></div>
+        <div class="stat"><b>${tareasUrgentes}</b><span>tareas para hoy o vencidas</span></div>
+      </div>
+      <div class="grid">
+        <section class="card agenda">
+          <h2>📅 Agenda <span class="filtros">${filtro}
+            <button class="icono-btn" title="Elegir calendarios de Google" onclick="alternarConfigCal()">⚙️</button></span></h2>
+          ${configCal}
+          <h3>Hoy</h3>
+          <ul class="lista">${hoyVisibles.map(evento).join('') || '<li class="vacio">Sin eventos hoy 🎉</li>'}</ul>
+          ${proximosHtml || (proximos.length ? '' : '<h3>Próximos días</h3><p class="vacio">Nada programado.</p>')}
+          ${botonMas('agenda', hoy.length + proximos.length)}
+        </section>
+        <section class="card">
+          <h2>✉️ Correo <span class="meta">${totalNoLeidos} sin leer</span></h2>
+          <div class="filtros tabs-correo">${tabsCorreo}</div>
+          ${carpetasCorreo ? `<div class="filtros carpetas">${carpetasCorreo}</div>` : ''}
+          ${pieCorreo}
+          <ul class="lista">${listaCorreo}</ul>
+          ${masCorreo}
+        </section>
+        <section class="card">
+          <h2>✅ Tareas <span class="meta">${d.tareas.length} pendientes</span></h2>
+          <ul class="lista">${recortar('tareas', d.tareas).map(tarea).join('') || '<li class="vacio">Nada pendiente 🙌</li>'}</ul>
+          ${botonMas('tareas', d.tareas.length)}
+        </section>
+      </div>
+      <section class="card archivos">
+        <h2>📁 Archivos de Microsoft 365 ${d.microsoft.conectado
+          ? '<button class="icono-btn" onclick="abrirOneDrive()">📂 Explorar OneDrive</button>' : ''}</h2>
+        ${d.microsoft.conectado
+          ? `<ul class="lista">${(d.archivos || []).map((a, i) => {
+              const ext = (a.nombre.split('.').pop() || '').toLowerCase().slice(0, 4);
+              return `<li class="item"><span class="ext" style="background:${COLOR_EXT[ext] || '#6b7280'}">${esc(ext)}</span>
+                <div class="cuerpo"><a class="titulo" href="#" onclick="event.preventDefault(); abrirArchivo(${i})">${esc(a.nombre)}</a>
+                <div class="meta">${esc(diaCorto(a.modificado))} · ${esc(a.cuenta)} · <a href="${esc(a.enlace)}" target="_blank">Abrir en Office</a></div></div></li>`;
+            }).join('') || '<li class="vacio">No hay archivos recientes.</li>'}</ul>`
+          : `<p class="meta">${d.microsoft.configurado
+            ? 'Conecta una cuenta de Microsoft (abajo, en Herramientas conectadas) para ver aquí tus archivos de OneDrive y Office con vista previa.'
+            : 'Para ver archivos de OneDrive y Microsoft 365 hace falta registrar la app gratuita en Azure (Paso 7 de LEEME.md).'}</p>`}
+      </section>
+      <section class="card herramientas">
+        <h2>🧩 Herramientas conectadas <span class="meta">Actualizado ${esc(hora(d.generado))}</span></h2>
+        <div class="tools">${d.herramientas.map(t => `<div class="tool">
+          <span class="punto" style="background:${t.activo ? 'var(--ok)' : 'var(--line)'}"></span>
+          <div><div class="titulo">${esc(t.nombre)}</div><div class="meta">${esc(t.detalle)}</div></div></div>`).join('')}</div>
+        ${bloqueMs}
+        <div class="enlaces">${d.enlaces.map(l => `<a href="${esc(l.url)}" target="_blank">${l.icono || ''} ${esc(l.nombre)}</a>`).join('')}
+          ${(d.microsoft.cuentas || []).filter(c => c.conectado && c.driveUrl).map(c =>
+            `<a href="${esc(c.driveUrl)}" target="_blank" title="Abrir OneDrive de ${esc(c.email)}">☁️ OneDrive · ${esc(c.email)}</a>`).join('')}</div>
+      </section>`;
+  }
+
+  iniciar();
+  setInterval(() => { if (SESION) cargar(); }, 10 * 60 * 1000); // se refresca solo cada 10 minutos
+</script>
+</body>
+</html>

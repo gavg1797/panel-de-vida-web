@@ -107,6 +107,16 @@
     .cal-config { background: var(--bg); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
     .cal-config label { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
     .cal-config .acciones { margin-top: 8px; }
+    .nuevo { display: grid; gap: 8px; }
+    .nuevo input:not([type=checkbox]), .nuevo textarea, .nuevo select { width: 100%; box-sizing: border-box; font: inherit; color: var(--text);
+      background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+    .nuevo label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); padding: 0; cursor: default; }
+    .nv-fila { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+    .nv-fila > label { flex: 1; min-width: 130px; }
+    .nuevo label.nv-check { display: flex; align-items: center; gap: 6px; flex: none; min-width: 0; color: var(--text); font-size: 13px; padding-bottom: 8px; }
+    .ev-acciones { display: flex; gap: 4px; align-items: flex-start; flex: none; }
+    .ev-acciones button { padding: 2px 8px; font-size: 12px; border-radius: 8px; }
+    .item.hecho .titulo { text-decoration: line-through; opacity: .6; }
     .ics-fila { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
     .ics-fila > span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .tabs-correo, .carpetas { flex-wrap: wrap; margin-bottom: 6px; }
@@ -379,6 +389,98 @@
   // ----- Elegir calendarios de Google -----
   function alternarConfigCal() { verConfigCal = !verConfigCal; pintar(); }
 
+  // ----- Crear evento, tarea o cumpleaños desde la agenda (se guarda en Google Calendar / Tasks) -----
+  let verNuevo = false, tipoNuevo = 'evento';
+  function alternarNuevo() { verNuevo = !verNuevo; pintar(); }
+  function cambiarTipoNuevo(t) { tipoNuevo = t; pintar(); }
+  function alternarTodoElDia(c) { document.getElementById('nvHoras').style.display = c.checked ? 'none' : ''; }
+
+  function formNuevo() {
+    const hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const cals = (DATOS.calendarios || []).filter(c => c.propio);
+    const tipos = [['evento', '📅 Evento'], ['tarea', '✅ Tarea'], ['cumpleanos', '🎂 Cumpleaños']];
+    const selCal = cals.length ? `<label>Calendario <select id="nvCal">${cals.map(c => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}</select></label>` : '';
+    let campos;
+    if (tipoNuevo === 'evento') {
+      campos = `<input id="nvTitulo" placeholder="Título del evento" maxlength="200">
+        <div class="nv-fila"><label>Fecha <input type="date" id="nvFecha" value="${hoy}"></label>
+        <label class="nv-check"><input type="checkbox" id="nvTodoDia" onchange="alternarTodoElDia(this)"> Todo el día</label></div>
+        <div class="nv-fila" id="nvHoras"><label>Inicio <input type="time" id="nvIni" value="09:00"></label>
+        <label>Fin <input type="time" id="nvFin" value="10:00"></label></div>
+        <input id="nvLugar" placeholder="Lugar (opcional)" maxlength="300">
+        <textarea id="nvNotas" placeholder="Descripción (opcional)" rows="2"></textarea>${selCal}`;
+    } else if (tipoNuevo === 'tarea') {
+      campos = `<input id="nvTitulo" placeholder="¿Qué hay que hacer?" maxlength="200">
+        <div class="nv-fila"><label>Vence <input type="date" id="nvFecha" value="${hoy}"></label></div>
+        <textarea id="nvNotas" placeholder="Notas (opcional)" rows="2"></textarea>
+        <div class="meta">Se guarda en Google Tasks (también aparece en Google Calendar).</div>`;
+    } else {
+      campos = `<input id="nvTitulo" placeholder="Nombre de la persona" maxlength="120">
+        <div class="nv-fila"><label>Fecha <input type="date" id="nvFecha" value="${hoy}"></label></div>
+        <div class="meta">Se crea un evento de todo el día que se repite cada año.</div>${selCal}`;
+    }
+    return `<div class="cal-config nuevo">
+      <div class="filtros">${tipos.map(([k, n]) => `<button class="${tipoNuevo === k ? 'on' : ''}" onclick="cambiarTipoNuevo('${k}')">${n}</button>`).join('')}</div>
+      ${campos}
+      <div class="acciones"><button class="primario" id="btnCrear" onclick="crearNuevo()">Crear</button>
+      <button onclick="alternarNuevo()">Cancelar</button></div></div>`;
+  }
+
+  function crearNuevo() {
+    const v = id => { const el = document.getElementById(id); return el ? (el.type === 'checkbox' ? el.checked : el.value) : ''; };
+    const datos = { tipo: tipoNuevo, titulo: v('nvTitulo'), fecha: v('nvFecha'), horaInicio: v('nvIni'), horaFin: v('nvFin'),
+      todoElDia: v('nvTodoDia'), lugar: v('nvLugar'), notas: v('nvNotas'), calendarioId: v('nvCal') };
+    if (!String(datos.titulo).trim()) { toast('Escribe un título.'); return; }
+    const b = document.getElementById('btnCrear');
+    b.disabled = true; b.textContent = 'Creando…';
+    run()
+      .withSuccessHandler(msg => { verNuevo = false; toast(msg); cargar(); })
+      .withFailureHandler(e => { b.disabled = false; b.textContent = 'Crear'; toast('Error: ' + e.message); })
+      .crearEnAgenda(datos);
+  }
+
+  // ----- Completar / descartar eventos de Google Calendar -----
+  function completarEv(i, hecho) {
+    const e = DATOS.eventos[i];
+    e.completado = hecho; pintar();
+    run()
+      .withSuccessHandler(() => toast(hecho ? 'Marcado como completado' : 'Marcado como pendiente'))
+      .withFailureHandler(err => { e.completado = !hecho; pintar(); toast('Error: ' + err.message); })
+      .completarEvento(e.calendarioId, e.id, e.inicio, hecho);
+  }
+
+  function descartarEv(i) {
+    const e = DATOS.eventos[i];
+    if (!confirm('¿Descartar "' + e.titulo + '"?\n\nSi el evento es tuyo se elimina de Google Calendar; si es una invitación, se rechaza.')) return;
+    DATOS.eventos.splice(i, 1); pintar();
+    run()
+      .withSuccessHandler(msg => toast(msg))
+      .withFailureHandler(err => { toast('Error: ' + err.message); cargar(); })
+      .descartarEvento(e.calendarioId, e.id, e.inicio);
+  }
+
+  // Mientras escribes en un formulario de la agenda no se redibuja el panel.
+  const editando = () => verNuevo || verConfigCal;
+
+  // ----- Correo nuevo cada 2 minutos y con el botón ↻ (solo el correo, sin recargar todo el panel) -----
+  function refrescarCorreo(manual) {
+    if (!SESION || !DATOS) return;
+    if (!manual && (document.hidden || editando())) return;
+    const b = document.getElementById('btnCorreo');
+    if (manual && b) { b.disabled = true; b.textContent = '↻ Actualizando…'; }
+    run()
+      .withSuccessHandler(c => {
+        if (!DATOS) return;
+        Object.assign(DATOS, c); carpetasCache = {};
+        if (!editando()) pintar();
+        // Si está abierta otra carpeta (Enviados, Borradores, Spam), también se vuelve a cargar.
+        if (correoCuenta !== 'todas' && correoCarpeta !== 'noLeidos') verCorreo(correoCuenta, correoCarpeta);
+        if (manual) toast('Correo actualizado');
+      })
+      .withFailureHandler(e => { if (manual) { toast('Error: ' + e.message); if (!editando()) pintar(); } })
+      .getCorreoNuevo();
+  }
+
   function guardarCal() {
     const ids = [...document.querySelectorAll('.cal-config input:checked')].map(i => i.value);
     const b = document.getElementById('btnGuardarCal');
@@ -621,13 +723,17 @@
     const hoy = eventos.filter(e => e.inicio < d.hoyFin && e.fin > d.hoyInicio);
     const proximos = eventos.filter(e => e.inicio >= d.hoyFin);
     const evento = e => {
-      const clase = e.todoElDia ? '' : (e.fin < ahora ? 'pasado' : (e.inicio <= ahora ? 'ahora' : ''));
+      const clase = (e.completado ? 'hecho ' : '') + (e.todoElDia ? '' : (e.fin < ahora ? 'pasado' : (e.inicio <= ahora ? 'ahora' : '')));
       const cuando = e.todoElDia ? 'Todo el día' : hora(e.inicio) + '<br>' + hora(e.fin);
+      const i = d.eventos.indexOf(e);
+      const botones = e.fuente === 'Google' && e.editable ? `<div class="ev-acciones">
+          <button title="${e.completado ? 'Marcar como pendiente' : 'Marcar como completado'}" onclick="completarEv(${i}, ${!e.completado})">${e.completado ? '↺' : '✓'}</button>
+          <button title="Descartar (eliminar o rechazar)" onclick="descartarEv(${i})">✕</button></div>` : '';
       return `<li class="item ${clase}"><div class="hora">${cuando}</div>
         <div class="barra" style="background:${esc(e.color || colorDe(e.fuente))}"></div>
         <div class="cuerpo">${e.enlace ? `<a class="titulo" href="${esc(e.enlace)}" target="_blank">${esc(e.titulo)}</a>`
           : `<span class="titulo">${esc(e.titulo)}</span>`}
-        <div class="meta">${esc(e.calendario)}${e.lugar ? ' · 📍 ' + esc(e.lugar) : ''}</div></div></li>`;
+        <div class="meta">${esc(e.calendario)}${e.lugar ? ' · 📍 ' + esc(e.lugar) : ''}</div></div>${botones}</li>`;
     };
     const configCal = verConfigCal ? `<div class="cal-config">
         ${(d.calendarios || []).map(c => `<label><input type="checkbox" value="${esc(c.id)}" ${c.visible ? 'checked' : ''}>
@@ -723,7 +829,9 @@
       <div class="grid">
         <section class="card agenda">
           <h2>📅 Agenda <span class="filtros">${filtro}
+            <button class="icono-btn" title="Crear evento, tarea o cumpleaños" onclick="alternarNuevo()">➕ Nuevo</button>
             <button class="icono-btn" title="Elegir calendarios de Google" onclick="alternarConfigCal()">⚙️</button></span></h2>
+          ${verNuevo ? formNuevo() : ''}
           ${configCal}
           <h3>Hoy</h3>
           <ul class="lista">${hoyVisibles.map(evento).join('') || '<li class="vacio">Sin eventos hoy 🎉</li>'}</ul>
@@ -731,7 +839,8 @@
           ${botonMas('agenda', hoy.length + proximos.length)}
         </section>
         <section class="card">
-          <h2>✉️ Correo <span class="meta">${totalNoLeidos} sin leer</span></h2>
+          <h2>✉️ Correo <span class="filtros"><span class="meta">${totalNoLeidos} sin leer</span>
+            <button class="icono-btn" id="btnCorreo" title="Actualizar los correos ahora" onclick="refrescarCorreo(true)">↻ Actualizar</button></span></h2>
           <div class="filtros tabs-correo">${tabsCorreo}</div>
           ${carpetasCorreo ? `<div class="filtros carpetas">${carpetasCorreo}</div>` : ''}
           ${pieCorreo}
@@ -771,7 +880,8 @@
   }
 
   iniciar();
-  setInterval(() => { if (SESION) cargar(); }, 10 * 60 * 1000); // se refresca solo cada 10 minutos
+  setInterval(() => { if (SESION && !editando()) cargar(); }, 10 * 60 * 1000); // todo el panel cada 10 minutos
+  setInterval(() => refrescarCorreo(false), 2 * 60 * 1000); // el correo cada 2 minutos
 </script>
 </body>
 </html>

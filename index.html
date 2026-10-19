@@ -226,21 +226,33 @@
   let SESION = TOKEN_INICIAL;
   try { if (SESION) localStorage.setItem('panelSesion', SESION); else SESION = localStorage.getItem('panelSesion') || ''; } catch (e) {}
 
-  // Lecturas rápidas: si una conexión se queda colgada, se corta a los 12 s y se reintenta una vez.
+  // Lecturas rápidas: si una conexión se queda colgada, se corta a los 12 s.
   const LECTURAS_RAPIDAS = ['getDashboardRapido', 'getCorreoNuevo'];
+  // Lecturas que se pueden repetir sin riesgo: si Google devuelve una página de error (HTML) o se cae
+  // la conexión, se reintenta una vez automáticamente. (Crear, completar o descartar nunca se repiten.)
+  const LECTURAS_SEGURAS = LECTURAS_RAPIDAS.concat(['getDashboard', 'correosCarpeta', 'carpetaOneDrive', 'buscarOneDrive',
+    'idOutlookClasico', 'contextoParaGemini', 'vistaPreviaArchivo']);
 
   /** Llama a servidorPanel() (Acceso.gs) y devuelve una promesa. */
   function servidor(datos, reintento) {
     if (EN_APPS_SCRIPT) {
       return new Promise((ok, mal) => google.script.run.withSuccessHandler(ok).withFailureHandler(mal).servidorPanel(datos));
     }
+    const lectura = datos.accion !== 'api' ? datos.accion === 'urlInicioSesion' : LECTURAS_SEGURAS.indexOf(datos.metodo) >= 0;
     const rapida = datos.accion === 'api' && LECTURAS_RAPIDAS.indexOf(datos.metodo) >= 0;
     const corte = new AbortController();
     const reloj = rapida ? setTimeout(() => corte.abort(), 12000) : null;
     return fetch(URL_SERVIDOR, { method: 'POST', body: JSON.stringify(datos), credentials: 'omit', signal: corte.signal })
-      .then(r => r.json())
-      .then(r => r.ok ? r.resultado : Promise.reject(new Error(r.error)))
-      .catch(e => (rapida && !reintento && /abort|fetch/i.test(e.name + e.message)) ? servidor(datos, true) : Promise.reject(e))
+      .then(r => r.text())
+      .then(txt => {
+        if (txt.trim().charAt(0) !== '{') {
+          console.warn('Respuesta no válida de Google:', txt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 300));
+          throw new Error('RED: Google devolvió una página de error');
+        }
+        const r = JSON.parse(txt);
+        return r.ok ? r.resultado : Promise.reject(new Error(r.error));
+      })
+      .catch(e => (lectura && !reintento && /abort|fetch|RED:/i.test(e.name + ' ' + e.message)) ? servidor(datos, true) : Promise.reject(e))
       .finally(() => clearTimeout(reloj));
   }
 

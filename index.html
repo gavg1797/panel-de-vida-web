@@ -219,14 +219,22 @@
   let SESION = TOKEN_INICIAL;
   try { if (SESION) localStorage.setItem('panelSesion', SESION); else SESION = localStorage.getItem('panelSesion') || ''; } catch (e) {}
 
+  // Lecturas rápidas: si una conexión se queda colgada, se corta a los 12 s y se reintenta una vez.
+  const LECTURAS_RAPIDAS = ['getDashboardRapido', 'getCorreoNuevo'];
+
   /** Llama a servidorPanel() (Acceso.gs) y devuelve una promesa. */
-  function servidor(datos) {
+  function servidor(datos, reintento) {
     if (EN_APPS_SCRIPT) {
       return new Promise((ok, mal) => google.script.run.withSuccessHandler(ok).withFailureHandler(mal).servidorPanel(datos));
     }
-    return fetch(URL_SERVIDOR, { method: 'POST', body: JSON.stringify(datos), credentials: 'omit' })
+    const rapida = datos.accion === 'api' && LECTURAS_RAPIDAS.indexOf(datos.metodo) >= 0;
+    const corte = new AbortController();
+    const reloj = rapida ? setTimeout(() => corte.abort(), 12000) : null;
+    return fetch(URL_SERVIDOR, { method: 'POST', body: JSON.stringify(datos), credentials: 'omit', signal: corte.signal })
       .then(r => r.json())
-      .then(r => r.ok ? r.resultado : Promise.reject(new Error(r.error)));
+      .then(r => r.ok ? r.resultado : Promise.reject(new Error(r.error)))
+      .catch(e => (rapida && !reintento && /abort|fetch/i.test(e.name + e.message)) ? servidor(datos, true) : Promise.reject(e))
+      .finally(() => clearTimeout(reloj));
   }
 
   /** Igual que google.script.run, pero cada llamada pasa por api() con la sesión. */

@@ -455,11 +455,34 @@
     const datos = { tipo: tipoNuevo, titulo: v('nvTitulo'), fecha: v('nvFecha'), horaInicio: v('nvIni'), horaFin: v('nvFin'),
       todoElDia: v('nvTodoDia'), lugar: v('nvLugar'), notas: v('nvNotas'), calendarioId: v('nvCal') };
     if (!String(datos.titulo).trim()) { toast('Escribe un título.'); return; }
-    const b = document.getElementById('btnCrear');
-    b.disabled = true; b.textContent = 'Creando…';
+    // El formulario se cierra al instante; lo creado aparece apenas Google confirma (sin esperar a recargar todo).
+    verNuevo = false; pintar();
+    toast('Creando en Google…');
     run()
-      .withSuccessHandler(msg => { verNuevo = false; toast(msg); cargar(); })
-      .withFailureHandler(e => { b.disabled = false; b.textContent = 'Crear'; toast('Error: ' + e.message); })
+      .withSuccessHandler(r => {
+        if (r.evento) {
+          const cal = (DATOS.calendarios || []).find(c => c.id === r.evento.calendarioId);
+          if (!cal || cal.visible) {
+            DATOS.eventos.push(r.evento);
+            DATOS.eventos.sort((a, b) => a.inicio - b.inicio || (b.todoElDia - a.todoElDia));
+          }
+          toast(r.mensaje + (cal && !cal.visible ? ' (ese calendario está oculto en el panel)' : ''));
+        } else if (r.tarea) {
+          DATOS.tareas.push(r.tarea);
+          DATOS.tareas.sort((a, b) => (a.vence == null ? Infinity : a.vence) - (b.vence == null ? Infinity : b.vence));
+          toast(r.mensaje);
+        }
+        if (!editando()) pintar();
+        setTimeout(() => { if (!editando()) cargar(); }, 3000); // pone al día el resto del panel en segundo plano
+      })
+      .withFailureHandler(e => {
+        // Se vuelve a abrir el formulario con lo que habías escrito.
+        tipoNuevo = datos.tipo; verNuevo = true; pintar();
+        const poner = (id, v) => { const el = document.getElementById(id); if (el && v != null) { if (el.type === 'checkbox') el.checked = !!v; else el.value = v; } };
+        poner('nvTitulo', datos.titulo); poner('nvFecha', datos.fecha); poner('nvIni', datos.horaInicio); poner('nvFin', datos.horaFin);
+        poner('nvTodoDia', datos.todoElDia); poner('nvLugar', datos.lugar); poner('nvNotas', datos.notas); poner('nvCal', datos.calendarioId);
+        toast('No se pudo crear: ' + e.message);
+      })
       .crearEnAgenda(datos);
   }
 

@@ -325,6 +325,7 @@
   }
 
   let primeraCarga = true;
+  let ultimoCambio = 0; // momento del último crear / ✓ / ✕ hecho desde el panel
   function cargar() {
     document.getElementById('cabecera').style.display = '';
     const b = document.getElementById('btnActualizar');
@@ -334,9 +335,12 @@
       primeraCarga = false;
       run().withSuccessHandler(d => { if (d && !DATOS) aplicarDatos(d); }).getDashboardRapido();
     }
+    const pedidoEn = Date.now();
     run()
       .withSuccessHandler(d => {
         b.disabled = false; b.textContent = '↻ Actualizar';
+        // Si cambiaste algo (crear, ✓, ✕) después de pedir estos datos, ya están viejos: llega otra recarga.
+        if (pedidoEn < ultimoCambio) return;
         aplicarDatos(d);
       })
       .withFailureHandler(e => {
@@ -457,6 +461,7 @@
     if (!String(datos.titulo).trim()) { toast('Escribe un título.'); return; }
     // El formulario se cierra al instante; lo creado aparece apenas Google confirma (sin esperar a recargar todo).
     verNuevo = false; pintar();
+    ultimoCambio = Date.now();
     toast('Creando en Google…');
     run()
       .withSuccessHandler(r => {
@@ -490,6 +495,7 @@
   function completarEv(i, hecho) {
     const e = DATOS.eventos[i];
     e.completado = hecho; pintar();
+    ultimoCambio = Date.now();
     run()
       .withSuccessHandler(() => toast(hecho ? 'Marcado como completado' : 'Marcado como pendiente'))
       .withFailureHandler(err => { e.completado = !hecho; pintar(); toast('Error: ' + err.message); })
@@ -500,6 +506,7 @@
     const e = DATOS.eventos[i];
     if (!confirm('¿Descartar "' + e.titulo + '"?\n\nSi el evento es tuyo se elimina de Google Calendar; si es una invitación, se rechaza.')) return;
     DATOS.eventos.splice(i, 1); pintar();
+    ultimoCambio = Date.now();
     run()
       .withSuccessHandler(msg => toast(msg))
       .withFailureHandler(err => { toast('Error: ' + err.message); cargar(); })

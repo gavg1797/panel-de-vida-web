@@ -397,9 +397,10 @@
 
   function formNuevo() {
     const hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    const cals = (DATOS.calendarios || []).filter(c => c.propio);
+    // Primero los calendarios que el panel muestra; los ocultos (⚙️) se marcan para que no "desaparezca" lo creado.
+    const cals = (DATOS.calendarios || []).filter(c => c.propio).sort((a, b) => b.visible - a.visible);
     const tipos = [['evento', '📅 Evento'], ['tarea', '✅ Tarea'], ['cumpleanos', '🎂 Cumpleaños']];
-    const selCal = cals.length ? `<label>Calendario <select id="nvCal">${cals.map(c => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}</select></label>` : '';
+    const selCal = cals.length ? `<label>Calendario <select id="nvCal">${cals.map(c => `<option value="${esc(c.id)}">${esc(c.nombre)}${c.visible ? '' : ' (oculto en el panel)'}</option>`).join('')}</select></label>` : '';
     let campos;
     if (tipoNuevo === 'evento') {
       campos = `<input id="nvTitulo" placeholder="Título del evento" maxlength="200">
